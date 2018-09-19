@@ -1,0 +1,121 @@
+
+version: '3'
+
+services:
+
+  gitlab-ce:
+    build: ./gitlab
+    container_name: gitlab-ce
+    ports:
+      - "8081:8081"
+      - "4443:4443"
+      - "2222:2222"
+    expose:
+    - "3000"
+    - "8081"
+    - "4443"
+    - "2222"
+    - "80"
+    - "22"
+    - "443"
+    environment:
+      GITLAB_OMNIBUS_CONFIG: |
+          external_url 'http://git.smartuni.ru';
+          
+          unicorn['worker_processes'] = 2;
+          
+          nginx['listen_port'] = 8081;
+          nginx['listen_https'] = false;
+          nginx['proxy_set_headers'] = {
+            "X-Forwarded-Proto" => "https",
+            "X-Forwarded-Ssl" => "on"
+          }
+          registry_nginx['listen_port'] = 8081;
+          registry_nginx['listen_https'] = false;
+          registry_nginx['proxy_set_headers'] = {
+            "X-Forwarded-Proto" => "https",
+            "X-Forwarded-Ssl" => "on"
+          }
+
+          registry['registry_http_addr'] = '0.0.0.0:8081';
+
+          gitlab_rails['omniauth_enabled'] = true 
+          gitlab_rails['omniauth_allow_single_sign_on'] = ['oauth2_generic']
+          gitlab_rails['omniauth_block_auto_created_users'] = false
+
+          gitlab_rails['omniauth_providers'] = [
+            {
+              "name" => "oauth2_generic",
+              "app_id" => "a770658102b887d74112e84bc2476664",
+              "app_secret" => "123456",
+              'args' => {
+                  client_options: {
+                      'site' => 'https://id.trusted.plus/', # including port if necessary
+                      "user_info_url" => "/trustedapp/rest/user/profile/get",
+                      "authorize_url" => "/idp/sso/oauth/authorize",
+                      "token_url" => "/idp/sso/oauth/token"
+                  },
+                  scope: 'userprofile',
+                  user_response_structure: {
+                      root_path: ['data'], # i.e. if attributes are returned in JsonAPI format (in a 'user' node nested under a 'data' node)
+                      attributes: { nickname: 'login', name: 'displayName' } # if the nickname attribute of a user is called 'username'
+                  },
+                  # optionally, you can add the following two lines to "white label" the display name
+                  # of this strategy (appears in urls and Gitlab login buttons)
+                  # If you do this, you must also replace oauth2_generic, everywhere it appears above, with the new name. 
+                  name: 'TRUSTED', # display name for this strategy
+                  strategy_class: "OmniAuth::Strategies::OAuth2Generic" # Devise-specific config option Gitlab uses to find renamed strategy
+              }
+            }
+          ]
+
+    volumes:
+      - ./volumes/gitlab-ce/config:/etc/gitlab:Z
+      - ./volumes/gitlab-ce/logs:/var/log/gitlab:Z
+      - ./volumes/gitlab-ce/data:/var/opt/gitlab:Z
+    restart: on-failure:3
+    networks:
+        - devops
+
+  # gitlab-runner:
+  #   image: gitlab/gitlab-runner:latest
+  #   container_name: gitlab-runner
+  #   ports:
+  #     - "8000:8000"
+  #   volumes:
+  #     - /var/run/docker.sock:/var/run/docker.sock
+  #     - ./volumes/gitlab-runner:/etc/gitlab-runner
+  #   links:
+  #     - gitlab-ce
+  #   restart: on-failure:3
+  #   networks:
+  #       - devops
+
+  nginx:
+    build: 
+      context: ./nginx
+    container_name: "proxy"
+    volumes:
+      - ./volumes/nginx/logs.conf:/var/log/nginx
+    # links:
+    #   - gitlab-ce:gitlab-ce
+      # - gitlab-runner:gitlab-runner
+    ports:
+      - "80:80"
+      - "443:443"
+      - "22:22"
+    expose:
+      - "3000"
+      - "80"
+      - "443"
+      - "22"
+    environment:
+      - NGINX_PORT=80
+      - NGINX_SSL=443
+      - NGINX_SSL=22
+    networks:
+        - devops
+
+networks:
+  devops:
+    driver: bridge
