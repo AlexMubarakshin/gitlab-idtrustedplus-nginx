@@ -40,32 +40,17 @@ services:
           registry['registry_http_addr'] = '0.0.0.0:8081';
 
           gitlab_rails['omniauth_enabled'] = true 
-          gitlab_rails['omniauth_allow_single_sign_on'] = ['oauth2_generic']
+          gitlab_rails['omniauth_allow_single_sign_on'] = ['idTrustedPlus']
           gitlab_rails['omniauth_block_auto_created_users'] = false
 
           gitlab_rails['omniauth_providers'] = [
             {
-              "name" => "oauth2_generic",
-              "app_id" => "a770658102b887d74112e84bc2476664",
-              "app_secret" => "123456",
-              'args' => {
-                  client_options: {
-                      'site' => 'https://id.trusted.plus/', # including port if necessary
-                      "user_info_url" => "/trustedapp/rest/user/profile/get",
-                      "authorize_url" => "/idp/sso/oauth/authorize",
-                      "token_url" => "/idp/sso/oauth/token"
-                  },
-                  scope: 'userprofile',
-                  user_response_structure: {
-                      root_path: ['data'], # i.e. if attributes are returned in JsonAPI format (in a 'user' node nested under a 'data' node)
-                      attributes: { nickname: 'login', name: 'displayName' } # if the nickname attribute of a user is called 'username'
-                  },
-                  # optionally, you can add the following two lines to "white label" the display name
-                  # of this strategy (appears in urls and Gitlab login buttons)
-                  # If you do this, you must also replace oauth2_generic, everywhere it appears above, with the new name. 
-                  name: 'TRUSTED', # display name for this strategy
-                  strategy_class: "OmniAuth::Strategies::OAuth2Generic" # Devise-specific config option Gitlab uses to find renamed strategy
-              }
+                "name" => "idTrustedPlus",
+                "app_id" => "a770658102b887d74112e84bc2476664",
+                "app_secret" => "123456",
+                'args' => {
+                    scope: 'userprofile',
+                }              
             }
           ]
 
