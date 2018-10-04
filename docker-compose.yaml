@@ -1,43 +1,46 @@
-
-version: '3'
+version: "3"
 
 services:
+  reverse-proxy:
+    image: traefik
+    container_name: traefik
+    networks:
+      - default
+      - traefik
+    command: --api --docker
+    labels:
+      - "traefik.port=8080"
+      - "traefik.backend=traefik"
+      - "traefik.frontend.entryPoints=http,https"
+      - "traefik.frontend.rule=Host:traefik.${DOMAIN_NAME}"
+    ports:
+      - "8080:8080"
+      - "80:80"
+      - "443:443"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./traefik.toml:/traefik.toml
 
   gitlab-ce:
     build: ./gitlab
-    container_name: gitlab-ce
-    ports:
-      - "8081:8081"
-      - "4443:4443"
-      - "2222:2222"
-    expose:
-    - "3000"
-    - "8081"
-    - "4443"
-    - "2222"
-    - "80"
-    - "22"
-    - "443"
+    restart: on-failure:3
+    networks:
+      - default
+      - traefik
     environment:
       GITLAB_OMNIBUS_CONFIG: |
-          external_url 'http://git.smartuni.ru';
+          external_url 'http://${GITLAB_SUBDOMAIN}.${DOMAIN_NAME}';
           
           unicorn['worker_processes'] = 2;
           
-          nginx['listen_port'] = 8081;
+          nginx['listen_port'] = 80;
           nginx['listen_https'] = false;
           nginx['proxy_set_headers'] = {
             "X-Forwarded-Proto" => "https",
             "X-Forwarded-Ssl" => "on"
           }
-          registry_nginx['listen_port'] = 8081;
-          registry_nginx['listen_https'] = false;
-          registry_nginx['proxy_set_headers'] = {
-            "X-Forwarded-Proto" => "https",
-            "X-Forwarded-Ssl" => "on"
-          }
 
-          registry['registry_http_addr'] = '0.0.0.0:8081';
+          registry_external_url 'http://${GITLAB_SUBDOMAIN}.${DOMAIN_NAME}:4567';
 
           gitlab_rails['omniauth_enabled'] = true 
           gitlab_rails['omniauth_allow_single_sign_on'] = ['idTrustedPlus']
@@ -48,19 +51,23 @@ services:
                 "name" => "idTrustedPlus",
                 "app_id" => "a770658102b887d74112e84bc2476664",
                 "app_secret" => "123456",
-                'args' => {
-                    scope: 'userprofile',
+                "args" => {
+                    scope: "userprofile"
                 }              
             }
           ]
+    labels:
+      - "traefik.enable=true"
+      - "traefik.backend=gitlab"
+      - "traefik.frontend.rule=Host:${GITLAB_SUBDOMAIN}.${DOMAIN_NAME}"
+      - "traefik.port=80"
+      - "traefik.backend.loadbalancer.sticky=true"
+      - "traefik.docker.loadbalancer.sticky=true"
 
     volumes:
       - ./volumes/gitlab-ce/config:/etc/gitlab:Z
       - ./volumes/gitlab-ce/logs:/var/log/gitlab:Z
       - ./volumes/gitlab-ce/data:/var/opt/gitlab:Z
-    restart: on-failure:3
-    networks:
-        - devops
 
   # gitlab-runner:
   #   image: gitlab/gitlab-runner:latest
@@ -76,31 +83,54 @@ services:
   #   networks:
   #       - devops
 
-  nginx:
-    build: 
-      context: ./nginx
-    container_name: "proxy"
-    volumes:
-      - ./volumes/nginx/logs.conf:/var/log/nginx
-    # links:
-    #   - gitlab-ce:gitlab-ce
-      # - gitlab-runner:gitlab-runner
-    ports:
-      - "80:80"
-      - "443:443"
-      - "22:22"
-    expose:
-      - "3000"
-      - "80"
-      - "443"
-      - "22"
-    environment:
-      - NGINX_PORT=80
-      - NGINX_SSL=443
-      - NGINX_SSL=22
-    networks:
-        - devops
+  # nginx:
+  #   build: 
+  #     context: ./nginx
+  #   container_name: "proxy"
+  #   volumes:
+  #     - ./volumes/nginx/logs.conf:/var/log/nginx
+  #   # links:
+  #   #   - gitlab-ce:gitlab-ce
+  #     # - gitlab-runner:gitlab-runner
+  #   ports:
+  #     - "80:80"
+  #     - "443:443"
+  #     - "22:22"
+  #   expose:
+  #     - "3000"
+  #     - "80"
+  #     - "443"
+  #     - "22"
+  #   environment:
+  #     - NGINX_PORT=80
+  #     - NGINX_SSL=443
+  #     - NGINX_SSL=22
+  #   networks:
+  #       - devops
+
+  #     # - gitlab-runner:gitlab-runner
+  #   ports:
+  #     - "80:80"
+  #     - "443:443"
+  #     - "22:22"
+  #   expose:
+  #     - "3000"
+  #     - "80"
+  #     - "443"
+  #     - "22"
+  #   environment:
+  #     - NGINX_PORT=80
+  #     - NGINX_SSL=443
+  #     - NGINX_SSL=22
+  #   networks:
+  #       - devops
 
 networks:
-  devops:
-    driver: bridge
+  default:
+    driver: weavemesh
+  traefik:
+    external:
+      name: public
+  
+#   devops:
+#     driver: bridge
