@@ -47,8 +47,8 @@ services:
           gitlab_rails['omniauth_providers'] = [
             {
                 "name" => "idTrustedPlus",
-                "app_id" => "a770658102b887d74112e84bc2476664",
-                "app_secret" => "123456",
+                "app_id" => "${APP_CLIENT_ID}",
+                "app_secret" => "${APP_CLIENT_SECRET}",
                 "args" => {
                     scope: "userprofile"
                 }              
